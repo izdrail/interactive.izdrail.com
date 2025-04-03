@@ -127,6 +127,7 @@ export default function Home() {
 
           receivedMessage += value;
 
+          // Detect the end of the response
           setAssistantMessage(receivedMessage);
 
           // Detect the tag part of the response
