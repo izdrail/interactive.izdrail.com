@@ -71,33 +71,19 @@ export const Introduction = ({
 
         </div>
 
+   
         <div className="my-24">
           <div className="my-8 font-bold typography-20 text-secondary">
-            Usage cautions
-          </div>
-          <div>
-            Please do not intentionally induce discriminatory or violent statements, or statements that demean specific individuals. Also, when replacing characters using VRM models, please follow the usage conditions of the model.
-          </div>
-        </div>
-
-        <div className="my-24">
-          <div className="my-8 font-bold typography-20 text-secondary">
-            Koeiromap API key
+             API key
           </div>
           <input
             type="text"
-            placeholder="XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+            placeholder=""
             value={koeiroMapKey}
             onChange={handleKoeiromapKeyChange}
             className="my-4 px-16 py-8 w-full h-40 bg-surface3 hover:bg-surface3-hover rounded-4 text-ellipsis"
           ></input>
-          <div>
-            Please obtain your API key from rinna Developers.
-            <Link
-              url="https://developers.rinna.co.jp/product/"
-              label="More details here"
-            />
-          </div>
+          
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ export default async function handler(
   const speakerX = req.body.speakerX;
   const speakerY = req.body.speakerY;
   const style = req.body.style;
-  const apiKey = "bf5821a29ca044bd8e1b722a04cf792d";
+  const apiKey = "";
   const style_wav = req.body.style_wav;
 
   const speaker_id = req.body.speaker_id;
@@ -23,14 +23,13 @@ export default async function handler(
 
 
  //send 
-  const voice = await koeiromapFreeV1(
+  const voice = await conquaTTS(
     message,
     speakerX,
-    speakerY,
-    style,
-    apiKey
+
   );
 
   console.log("voice", voice);
+  
 
 }

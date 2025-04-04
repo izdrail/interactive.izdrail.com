@@ -81,25 +81,9 @@ export const Settings = ({
             ></textarea>
           </div>
           <div className="my-40">
-            <div className="my-16 typography-20 font-bold">Voice Adjustment</div>
-            <div>
-              We are using Koemotions Koeiromap API. For more details, please see
-              <Link
-                url="https://koemotion.rinna.co.jp"
-                label="https://koemotion.rinna.co.jp"
-              />
-              .
-            </div>
-            <div className="mt-16 font-bold">API Key</div>
-            <div className="mt-8">
-              <input
-                className="text-ellipsis px-16 py-8 w-col-span-2 bg-surface1 hover:bg-surface1-hover rounded-8"
-                type="text"
-                placeholder="..."
-                value={koeiromapKey}
-                onChange={onChangeKoeiromapKey}
-              />
-            </div>
+          
+           
+
 
             <div className="mt-16 font-bold">Presets</div>
             <div className="my-8 grid grid-cols-2 gap-[8px]">

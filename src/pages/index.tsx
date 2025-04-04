@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState, useMemo } from "react";
 import VrmViewer from "@/components/vrmViewer";
 import { ViewerContext } from "@/features/vrmViewer/viewerContext";
 import {
@@ -11,14 +11,17 @@ import { MessageInputContainer } from "@/components/messageInputContainer";
 import { SYSTEM_PROMPT } from "@/features/constants/systemPromptConstants";
 import { KoeiroParam, DEFAULT_PARAM } from "@/features/constants/koeiroParam";
 import { getChatResponseStream } from "@/features/chat/openAiChat";
-
 import { Menu } from "@/components/menu";
 import { GitHubLink } from "@/components/githubLink";
 import { Meta } from "@/components/meta";
 
+// Constants
+const LOCAL_STORAGE_KEY = "chatVRMParams";
+
 export default function Home() {
   const { viewer } = useContext(ViewerContext);
 
+  // State management
   const [systemPrompt, setSystemPrompt] = useState(SYSTEM_PROMPT);
   const [openAiKey, setOpenAiKey] = useState("");
   const [koeiromapKey, setKoeiromapKey] = useState("");
@@ -26,170 +29,232 @@ export default function Home() {
   const [chatProcessing, setChatProcessing] = useState(false);
   const [chatLog, setChatLog] = useState<Message[]>([]);
   const [assistantMessage, setAssistantMessage] = useState("");
+  const [pendingAnimations, setPendingAnimations] = useState<Screenplay[]>([]);
+  const [isAnimating, setIsAnimating] = useState(false);
 
+  // Load saved parameters from local storage when the component mounts
   useEffect(() => {
-    // Load saved parameters from local storage when the component mounts
-    if (window.localStorage.getItem("chatVRMParams")) {
-      const params = JSON.parse(
-        window.localStorage.getItem("chatVRMParams") as string
-      );
-      setSystemPrompt(params.systemPrompt ?? SYSTEM_PROMPT);
-      setKoeiroParam(params.koeiroParam ?? DEFAULT_PARAM);
-      setChatLog(params.chatLog ?? []);
+    const savedParams = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    
+    if (savedParams) {
+      try {
+        const params = JSON.parse(savedParams);
+        setSystemPrompt(params.systemPrompt ?? SYSTEM_PROMPT);
+        setKoeiroParam(params.koeiroParam ?? DEFAULT_PARAM);
+        setChatLog(params.chatLog ?? []);
+      } catch (error) {
+        console.error("Failed to parse saved parameters:", error);
+      }
     }
   }, []);
 
+  // Save parameters to local storage whenever they change
   useEffect(() => {
-    // Save parameters to local storage whenever they change
-    process.nextTick(() =>
-      window.localStorage.setItem(
-        "chatVRMParams",
-        JSON.stringify({ systemPrompt, koeiroParam, chatLog })
-      )
-    );
+    const saveToLocalStorage = () => {
+      try {
+        window.localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          JSON.stringify({ systemPrompt, koeiroParam, chatLog })
+        );
+      } catch (error) {
+        console.error("Failed to save parameters:", error);
+      }
+    };
+    
+    requestAnimationFrame(saveToLocalStorage);
   }, [systemPrompt, koeiroParam, chatLog]);
 
-  const handleChangeChatLog = useCallback(
-    (targetIndex: number, text: string) => {
-      // Update a specific message in the chat log
-      const newChatLog = chatLog.map((v: Message, i) => {
-        return i === targetIndex ? { role: v.role, content: text } : v;
-      });
+  // Animation queue processor effect
+  useEffect(() => {
+    const processAnimationQueue = async () => {
+      if (pendingAnimations.length > 0 && !isAnimating && viewer) {
+        setIsAnimating(true);
+        const nextAnimation = pendingAnimations[0];
+        
+        try {
+          // Only animate the VRM model without audio
+          await animateVrmOnly(nextAnimation);
+        } catch (error) {
+          console.error("Animation error:", error);
+        }
+        
+        // Remove the processed animation from the queue
+        setPendingAnimations(current => current.slice(1));
+        setIsAnimating(false);
+      }
+    };
 
-      setChatLog(newChatLog);
-    },
-    [chatLog]
-  );
+    processAnimationQueue();
+  }, [pendingAnimations, isAnimating, viewer]);
+  
+  // Prepare messages for Chat GPT with memoization
+  const getMessagesForAPI = useMemo(() => (userMessages: Message[]) => {
+    return [
+      { role: "system", content: systemPrompt },
+      ...userMessages
+    ];
+  }, [systemPrompt]);
+
+  // Update a specific message in the chat log
+  const handleChangeChatLog = useCallback((targetIndex: number, text: string) => {
+    setChatLog(prevChatLog => 
+      prevChatLog.map((v: Message, i) => 
+        i === targetIndex ? { ...v, content: text } : v
+      )
+    );
+  }, []);
+
+  // Reset handlers
+  const handleResetChatLog = useCallback(() => setChatLog([]), []);
+  const handleResetSystemPrompt = useCallback(() => setSystemPrompt(SYSTEM_PROMPT), []);
 
   /**
-   * Request and play audio for each sentence in sequence
+   * Animate VRM model without audio playback
    */
-  const handleSpeakAi = useCallback(
-    async (
-      screenplay: Screenplay,
-      onStart?: () => void,
-      onEnd?: () => void
-    ) => {
-      speakCharacter(screenplay, viewer, koeiromapKey, onStart, onEnd);
-    },
-    [viewer, koeiromapKey]
-  );
+  const animateVrmOnly = useCallback(async (screenplay: Screenplay) => {
+    if (!viewer) return;
+    
+    return new Promise<void>((resolve) => {
+      // Use speakCharacter but pass an empty koeiromapKey to skip audio generation
+      // The model will still animate based on the text timing
+      speakCharacter(
+        screenplay, 
+        viewer, 
+        "", // Empty koeiromapKey to skip audio generation
+        () => {}, // onStart
+        () => resolve() // onEnd
+      );
+    });
+  }, [viewer]);
+
+  /**
+   * Queue an animation for the VRM model
+   */
+  const queueAnimation = useCallback((screenplay: Screenplay) => {
+    setPendingAnimations(current => [...current, screenplay]);
+  }, []);
+
+  /**
+   * Process a sentence from the AI response
+   */
+  const processSentence = useCallback((
+    sentence: string, 
+    tag: string, 
+    koeiroParam: KoeiroParam
+  ) => {
+    // Skip unpronounceable or unnecessary strings
+    if (!sentence.replace(/^[\s\[\(\{「［（【『〈《〔｛«‹〘〚〛〙›»〕》〉『】）］」\}\)\]]+$/g, "")) {
+      return null;
+    }
+
+    const aiText = `${tag} ${sentence}`;
+    const aiTalks = textsToScreenplay([aiText], koeiroParam);
+    
+    return { aiText, aiTalks };
+  }, []);
 
   /**
    * Handle conversation with the assistant
    */
-  const handleSendChat = useCallback(
-    async (text: string) => {
-      // Check if the OpenAI key is provided
+  const handleSendChat = useCallback(async (text: string) => {
+    if (!text?.trim()) return;
 
-      const newMessage = text;
+    setChatProcessing(true);
+    setAssistantMessage(""); // Clear previous assistant message
+    
+    // Add the user's message to the chat log
+    const messageLog: Message[] = [
+      ...chatLog,
+      { role: "user", content: text }
+    ];
+    setChatLog(messageLog);
 
-      if (newMessage == null) return;
-
-      setChatProcessing(true);
-      // Add the user's message to the chat log and display it
-      const messageLog: Message[] = [
-        ...chatLog,
-        { role: "user", content: newMessage },
-      ];
-      setChatLog(messageLog);
-
-      // Prepare messages for Chat GPT
-      const messages: Message[] = [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        ...messageLog,
-      ];
-
+    try {
       // Get the response stream from Chat GPT
-      const stream = await getChatResponseStream(messages, openAiKey).catch(
-        (e) => {
-          console.error(e);
-          return null;
-        }
+      const stream = await getChatResponseStream(
+        getMessagesForAPI(messageLog), 
+        openAiKey
       );
-      if (stream == null) {
-        setChatProcessing(false);
-        return;
+      
+      if (!stream) {
+        throw new Error("Failed to get response stream");
       }
 
       const reader = stream.getReader();
       let receivedMessage = "";
-      let aiTextLog = "";
+      let completeResponse = "";
       let tag = "";
       const sentences = new Array<string>();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      const animationsToQueue = [];
+      
+      // Create a new assistant message placeholder in the chat log
+      setChatLog(prev => [
+        ...prev,
+        { role: "assistant", content: "" }
+      ]);
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          receivedMessage += value;
+        receivedMessage += value;
+        completeResponse += value;
+        
+        // Update the assistant message immediately for display
+        setAssistantMessage(completeResponse);
+        
+        // Update the latest message in the chat log
+        setChatLog(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { 
+            role: "assistant", 
+            content: completeResponse 
+          };
+          return updated;
+        });
 
-          // Detect the end of the response
-          setAssistantMessage(receivedMessage);
+        // Extract tag from the beginning of the response
+        const tagMatch = receivedMessage.match(/^\[(.*?)\]/);
+        if (tagMatch && tagMatch[0]) {
+          tag = tagMatch[0];
+          receivedMessage = receivedMessage.slice(tag.length);
+        }
 
-          // Detect the tag part of the response
-          const tagMatch = receivedMessage.match(/^\[(.*?)\]/);
-          if (tagMatch && tagMatch[0]) {
-            tag = tagMatch[0];
-            receivedMessage = receivedMessage.slice(tag.length);
-          }
+        // Process text sentence by sentence
+        const sentenceMatch = receivedMessage.match(/^(.+[。．！？\n]|.{10,}[、,])/);
+        if (sentenceMatch && sentenceMatch[0]) {
+          const sentence = sentenceMatch[0];
+          sentences.push(sentence);
+          receivedMessage = receivedMessage.slice(sentence.length).trimStart();
 
-          // Process the response sentence by sentence
-          const sentenceMatch = receivedMessage.match(
-            /^(.+[。．！？\n]|.{10,}[、,])/
-          );
-          if (sentenceMatch && sentenceMatch[0]) {
-            const sentence = sentenceMatch[0];
-            sentences.push(sentence);
-            receivedMessage = receivedMessage
-              .slice(sentence.length)
-              .trimStart();
-
-            // Skip unpronounceable or unnecessary strings
-            if (
-              !sentence.replace(
-                /^[\s\[\(\{「［（【『〈《〔｛«‹〘〚〛〙›»〕》〉』】）］」\}\)\]]+$/g,
-                ""
-              )
-            ) {
-              continue;
-            }
-
-            const aiText = `${tag} ${sentence}`;
-            const aiTalks = textsToScreenplay([aiText], koeiroParam);
-            aiTextLog += aiText;
-
-            // Generate and play audio for each sentence, and display the response
-            const currentAssistantMessage = sentences.join(" ");
-            handleSpeakAi(aiTalks[0], () => {
-              //setAssistantMessage(currentAssistantMessage);
-            });
+          const processed = processSentence(sentence, tag, koeiroParam);
+          if (processed) {
+            const { aiTalks } = processed;
+            // Add to animation queue instead of playing immediately
+            animationsToQueue.push(aiTalks[0]);
           }
         }
-      } catch (e) {
-        setChatProcessing(false);
-        console.error(e);
-      } finally {
-        reader.releaseLock();
       }
-
-      // Add the assistant's response to the chat log
-      const messageLogAssistant: Message[] = [
-        ...messageLog,
-        { role: "assistant", content: aiTextLog },
-      ];
-
-      setChatLog(messageLogAssistant);
+      
+      // After displaying the full message, queue all animations
+      animationsToQueue.forEach(animation => queueAnimation(animation));
+      
+    } catch (error) {
+      console.error("Chat processing error:", error);
+    } finally {
       setChatProcessing(false);
-    },
-    [systemPrompt, chatLog, handleSpeakAi, openAiKey, koeiroParam]
-  );
+    }
+  }, [
+    chatLog, 
+    openAiKey, 
+    koeiroParam, 
+    getMessagesForAPI, 
+    processSentence, 
+    queueAnimation
+  ]);
 
   return (
-    <div className={"font-M_PLUS_2"}>
+    <div className="font-M_PLUS_2">
       <Meta />
       <VrmViewer />
       <MessageInputContainer
@@ -207,8 +272,8 @@ export default function Home() {
         onChangeSystemPrompt={setSystemPrompt}
         onChangeChatLog={handleChangeChatLog}
         onChangeKoeiromapParam={setKoeiroParam}
-        handleClickResetChatLog={() => setChatLog([])}
-        handleClickResetSystemPrompt={() => setSystemPrompt(SYSTEM_PROMPT)}
+        handleClickResetChatLog={handleResetChatLog}
+        handleClickResetSystemPrompt={handleResetSystemPrompt}
         onChangeKoeiromapKey={setKoeiromapKey}
       />
       <GitHubLink />
