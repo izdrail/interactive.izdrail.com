@@ -1,12 +1,12 @@
 {
-  "name": "agent-izdrail",
-    "description": "A 3d virtual agent interface for the my personal agent.",
-  "version": "0.0.1",
-  "private": true,
+  "name": "3d-assistant",
+  "description": "A 3d virtual assistant that can be trained on a custom dataset and used in a web browser.",
+  "version": "0.0.2",
+  "private": false,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next build && next start",
+    "start": "next build && next start -p 1603",
     "export": "next export",
     "lint": "next lint"
   },

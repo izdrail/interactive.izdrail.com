@@ -11,8 +11,8 @@ services:
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     ports:
-      - '3000:3000'
-      - '3000:3000'
+      - '1602:1602'
+      - '1603:1603'
     environment:
       WWWUSER: '${WWWUSER}'
       WWWGROUP: '${WWWGROUP}'

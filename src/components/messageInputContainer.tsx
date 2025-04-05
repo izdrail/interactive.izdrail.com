@@ -25,7 +25,7 @@ export const MessageInputContainer = ({
       const text = event.results[0][0].transcript;
       setUserMessage(text);
 
-      // 発言の終了時
+      // response
       if (event.results[0].isFinal) {
         setUserMessage(text);
         // starts the chat process

@@ -24,7 +24,7 @@ export type Talk = {
   message: string;
 };
 
-const emotions = ["neutral", "happy", "angry", "sad", "relaxed"] as const;
+const emotions = ["happy", "angry", "sad"] as const;
 type EmotionType = (typeof emotions)[number] & VRMExpressionPresetName;
 
 
@@ -43,7 +43,7 @@ export const textsToScreenplay = (
   koeiroParam: KoeiroParam
 ): Screenplay[] => {
   const screenplays: Screenplay[] = [];
-  let prevExpression = "neutral";
+  let prevExpression = "happy";
   for (let i = 0; i < texts.length; i++) {
     const text = texts[i];
 

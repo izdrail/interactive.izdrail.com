@@ -1,0 +1,5 @@
+fastapi==0.110.0
+uvicorn==0.27.1
+jinja2==3.1.2
+python-multipart==0.0.9
+TTS~=0.22.0
